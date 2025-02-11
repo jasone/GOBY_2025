@@ -421,35 +421,54 @@ public final class Constants {
     public static final int kRightElevatorMotorID = 10; //TODO: Change the ID or give that ID to the motor
     public static final int kPivotMotorID = 11; //TODO: Change the ID or give that ID to the motor
 
-    public static final int kElevatorMotorsCurrentLimit = SwerveModuleConstants.kDriveMotorCurrentLimit;
-    public static final int kPivotMotorCurrentLimit = SwerveModuleConstants.kTurningMotorCurrentLimit;
-
-    public static final double kElevatorVelConversionFactor = 1; //TODO: Calculate the conversion factor
-    public static final double kElevatorPosConversionFactor = 1; //TODO: Calculate the conversion factor
-    public static final double kPivotVelConversionFactor = 1; //TODO: Calculate the conversion factor
-    public static final double kPivotPosConversionFactor = 1; //TODO: Calculate the conversion factor
-
-    public static final boolean kLeftElevatorMotorReversed = true; //TODO: Find what elevator motor is reversed
-    public static final boolean kPivotMotorReversed = false; //TODO: Find if the pivot motor is reversed
-
-    //TODO: Tune max velocity and acceleration for the elevator and pivot
-    public static final double kElevatorMaxVel = 1.0;
-    public static final double kElevatorMaxAccel = 4.0;
-    public static final double kPivotMaxVel = Math.PI / 2;
-    public static final double kPivotMaxAccel = 2 * Math.PI;
     public static final double kDebouncingTime = 0.25;
 
     //TODO: Make sure the tables are sorted from lowest to highest height.
     public static final PosEntry[] kMinAngleTable = {}; //TODO: Populate table
     public static final PosEntry[] kMaxAngleTable = {}; //TODO: Populate table
 
-    public static final PIDF kLeftElevatorVelPIDF = new PIDF(0.0, 0.0, 0.0); //TODO: Find PID values
-    public static final PIDF kLeftElevatorPosPIDF = new PIDF(0.0, 0.0, 0.0); //TODO: Find PID values
-    public static final PIDF kPivotVelPIDF = new PIDF(0.0, 0.0, 0.0); //TODO: Find PID values
-    public static final PIDF kPivotPosPIDF = new PIDF(0.0, 0.0, 0.0); //TODO: Find PID values
-    public static final ClosedLoopSlot kLeftElevatorVelPIDFSlotID = ClosedLoopSlot.kSlot0;
-    public static final ClosedLoopSlot kElevatorPosSlot = ClosedLoopSlot.kSlot1;
-    public static final ClosedLoopSlot kPivotVelPIDFSlotID = ClosedLoopSlot.kSlot0;
-    public static final ClosedLoopSlot kPivotPosSlot = ClosedLoopSlot.kSlot1;
+    public static final SparkUtil.PIDFSlot kElevatorVelPIDFSlot = new SparkUtil.PIDFSlot(
+      new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
+      ClosedLoopSlot.kSlot0
+    );
+    public static final SparkUtil.PIDFSlot kElevatorPosPIDFSlot = new SparkUtil.PIDFSlot(
+      new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
+      ClosedLoopSlot.kSlot1
+    );
+    public static final SparkUtil.Config kElevatorMotorConfig = new SparkUtil.Config(
+      20, // TODO: Configure.
+      0.1, // TODO: Configure.
+      true, // TODO: Find what elevator motor is reversed
+      1.0, // TODO: Compute.
+      1.0, // TODO: Compute.
+      1.0,
+      4.0,
+      new ArrayList<>() {{
+        add(kElevatorPosPIDFSlot);
+        add(kElevatorVelPIDFSlot);
+      }}
+    );
+
+    public static final SparkUtil.PIDFSlot kPivotVelPIDFSlot = new SparkUtil.PIDFSlot(
+      new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
+      ClosedLoopSlot.kSlot0
+    );
+    public static final SparkUtil.PIDFSlot kPivotPosPIDFSlot = new SparkUtil.PIDFSlot(
+      new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
+      ClosedLoopSlot.kSlot1
+    );
+    public static final SparkUtil.Config kPivotMotorConfig = new SparkUtil.Config(
+      20, // TODO: Configure.
+      0.1, // TODO: Configure.
+      false, // TODO: Find if the pivot motor is reversed
+      1.0, // TODO: Compute.
+      1.0, // TODO: Compute.
+      Math.PI / 2.0,
+      2.0 * Math.PI,
+      new ArrayList<>() {{
+        add(kPivotPosPIDFSlot);
+        add(kPivotVelPIDFSlot);
+      }}
+    );
   }
 }
