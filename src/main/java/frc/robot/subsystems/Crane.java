@@ -7,17 +7,15 @@ package frc.robot.subsystems;
 import java.util.Optional;
 
 import com.revrobotics.RelativeEncoder;
+import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkFlex;
-import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
-import com.revrobotics.spark.config.SparkFlexConfig;
-import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
-import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.CraneConstants;
+import frc.robot.utilities.SparkUtil;
 
 public class Crane extends SubsystemBase {
   private final SparkFlex m_leftElevatorMotor;
@@ -52,49 +50,9 @@ public class Crane extends SubsystemBase {
     m_leftElevatorPID = m_leftElevatorMotor.getClosedLoopController();
     m_pivotPID = m_pivotMotor.getClosedLoopController();
 
-    SparkFlexConfig leftElevatorConfig = new SparkFlexConfig();
-    leftElevatorConfig.smartCurrentLimit(CraneConstants.kElevatorMotorsCurrentLimit)
-      .inverted(CraneConstants.kLeftElevatorMotorReversed)
-      .idleMode(IdleMode.kBrake);
-    leftElevatorConfig.encoder
-      .velocityConversionFactor(CraneConstants.kElevatorVelConversionFactor)
-      .positionConversionFactor(CraneConstants.kElevatorPosConversionFactor);
-    leftElevatorConfig.closedLoop
-      .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
-      .maxMotion
-        .maxVelocity(CraneConstants.kElevatorMaxVel)
-        .maxAcceleration(CraneConstants.kElevatorMaxAccel);
-
-    SparkFlexConfig rightElevatorConfig = new SparkFlexConfig();
-    rightElevatorConfig.smartCurrentLimit(CraneConstants.kElevatorMotorsCurrentLimit)
-      .idleMode(IdleMode.kBrake)
-      .follow(m_leftElevatorMotor, true);
-    leftElevatorConfig.encoder
-      .velocityConversionFactor(CraneConstants.kElevatorVelConversionFactor)
-      .positionConversionFactor(CraneConstants.kElevatorPosConversionFactor);
-    leftElevatorConfig.closedLoop
-      .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
-      .maxMotion
-        .maxVelocity(CraneConstants.kElevatorMaxVel)
-        .maxAcceleration(CraneConstants.kElevatorMaxAccel);
-
-    SparkFlexConfig pivotConfig = new SparkFlexConfig();
-    rightElevatorConfig.smartCurrentLimit(CraneConstants.kPivotMotorCurrentLimit)
-      .inverted(CraneConstants.kPivotMotorReversed)
-      .idleMode(IdleMode.kBrake);
-    leftElevatorConfig.encoder
-      .velocityConversionFactor(CraneConstants.kPivotVelConversionFactor)
-      .positionConversionFactor(CraneConstants.kPivotPosConversionFactor);
-    leftElevatorConfig.closedLoop
-      .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
-      .maxMotion
-        .maxVelocity(CraneConstants.kPivotMaxVel)
-        .maxAcceleration(CraneConstants.kPivotMaxAccel);
-
-    CraneConstants.kLeftElevatorVelPIDF.controllerSet(leftElevatorConfig.closedLoop, CraneConstants.kLeftElevatorVelPIDFSlotID);
-    CraneConstants.kLeftElevatorPosPIDF.controllerSet(leftElevatorConfig.closedLoop, CraneConstants.kElevatorPosSlot);
-    CraneConstants.kPivotVelPIDF.controllerSet(pivotConfig.closedLoop, CraneConstants.kPivotVelPIDFSlotID);
-    CraneConstants.kPivotPosPIDF.controllerSet(pivotConfig.closedLoop, CraneConstants.kPivotPosSlot);
+    SparkUtil.configureMotor(m_leftElevatorMotor, CraneConstants.kElevatorMotorConfig);
+    SparkUtil.configureFollowerMotor(m_rightElevatorMotor, CraneConstants.kElevatorMotorConfig, m_leftElevatorMotor);
+    SparkUtil.configureMotor(m_pivotMotor, CraneConstants.kPivotMotorConfig);
   }
 
   private double getAvgElevatorEncoderPos() {
@@ -119,13 +77,15 @@ public class Crane extends SubsystemBase {
   private void moveElevatorToImpl(double height, double heightTolerance) {
     m_heightSetpoint = height;
     m_heightTolerance = heightTolerance;
-    m_leftElevatorPID.setReference(height, ControlType.kMAXMotionPositionControl, CraneConstants.kElevatorPosSlot);
+    m_leftElevatorPID.setReference(height, ControlType.kMAXMotionPositionControl,
+      CraneConstants.kElevatorPosPIDFSlot.slot());
   }
 
   private void movePivotToImpl(double angle, double angleTolerance) {
     m_angleSetpoint = angle;
     m_angleTolerance = angleTolerance;
-    m_pivotPID.setReference(angle, ControlType.kMAXMotionPositionControl, CraneConstants.kPivotPosSlot);
+    m_pivotPID.setReference(angle, ControlType.kMAXMotionPositionControl,
+      CraneConstants.kPivotPosPIDFSlot.slot());
   }
 
   public int moveElevatorTo(double height, double heightTolerance) {
@@ -150,12 +110,12 @@ public class Crane extends SubsystemBase {
   }
 
   public void moveElevatorVel(double velocity) {
-    m_leftElevatorPID.setReference(velocity, ControlType.kMAXMotionVelocityControl, CraneConstants.kLeftElevatorVelPIDFSlotID);
+    m_leftElevatorPID.setReference(velocity, ControlType.kMAXMotionVelocityControl, CraneConstants.kElevatorVelPIDFSlot.slot());
     allocateVelSerialNum();;
   }
 
   public void movePivotVel(double velocity) {
-    m_leftElevatorPID.setReference(velocity, ControlType.kMAXMotionVelocityControl, CraneConstants.kLeftElevatorVelPIDFSlotID);
+    m_pivotPID.setReference(velocity, ControlType.kMAXMotionVelocityControl, CraneConstants.kPivotVelPIDFSlot.slot());
     allocateVelSerialNum();
   }
 
