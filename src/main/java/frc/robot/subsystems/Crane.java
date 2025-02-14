@@ -18,45 +18,41 @@ import frc.robot.Constants.CraneConstants;
 import frc.robot.utilities.SparkUtil;
 
 public class Crane extends SubsystemBase {
+  private final SparkFlex m_pivotMotor;
   private final SparkFlex m_leftElevatorMotor;
   private final SparkFlex m_rightElevatorMotor;
-  private final SparkFlex m_pivotMotor;
 
-  private final RelativeEncoder m_leftElevatorEncoder;
-  private final RelativeEncoder m_rightElevatorEncoder;
   private final RelativeEncoder m_pivotEncoder;
+  private final RelativeEncoder m_elevatorEncoder;
 
-  private final SparkClosedLoopController m_leftElevatorPID;
   private final SparkClosedLoopController m_pivotPID;
+  private final SparkClosedLoopController m_leftElevatorPID;
 
-  private double m_heightTolerance;
-  private double m_angleTolerance;
-  private double m_heightSetpoint;
   private double m_angleSetpoint;
+  private double m_heightSetpoint;
+
+  private double m_angleTolerance;
+  private double m_heightTolerance;
 
   private int m_currentSerialNum = 0;
   private double m_startTime = 0.0;
   private boolean m_isVelControlled = false;
 
   public Crane() {
-    m_leftElevatorMotor = new SparkFlex(CraneConstants.kLeftElevatorMotorID, MotorType.kBrushless);
-    m_rightElevatorMotor = new SparkFlex(CraneConstants.kRightElevatorMotorID, MotorType.kBrushless);
     m_pivotMotor = new SparkFlex(CraneConstants.kPivotMotorID, MotorType.kBrushless);
-
-    m_leftElevatorEncoder = m_leftElevatorMotor.getEncoder();
-    m_rightElevatorEncoder = m_rightElevatorMotor.getEncoder();
-    m_pivotEncoder = m_pivotMotor.getEncoder();
-
-    m_leftElevatorPID = m_leftElevatorMotor.getClosedLoopController();
-    m_pivotPID = m_pivotMotor.getClosedLoopController();
-
-    SparkUtil.configureMotor(m_leftElevatorMotor, CraneConstants.kElevatorMotorConfig);
-    SparkUtil.configureFollowerMotor(m_rightElevatorMotor, CraneConstants.kElevatorMotorConfig, m_leftElevatorMotor);
     SparkUtil.configureMotor(m_pivotMotor, CraneConstants.kPivotMotorConfig);
-  }
 
-  private double getAvgElevatorEncoderPos() {
-    return (m_leftElevatorEncoder.getPosition() + m_rightElevatorEncoder.getPosition()) / 2.0;
+    m_leftElevatorMotor = new SparkFlex(CraneConstants.kLeftElevatorMotorID, MotorType.kBrushless);
+    SparkUtil.configureMotor(m_leftElevatorMotor, CraneConstants.kElevatorMotorConfig);
+
+    m_rightElevatorMotor = new SparkFlex(CraneConstants.kRightElevatorMotorID, MotorType.kBrushless);
+    SparkUtil.configureFollowerMotor(m_rightElevatorMotor, CraneConstants.kElevatorMotorConfig, m_leftElevatorMotor);
+
+    m_pivotEncoder = m_pivotMotor.getEncoder();
+    m_elevatorEncoder = m_leftElevatorMotor.getEncoder();
+
+    m_pivotPID = m_pivotMotor.getClosedLoopController();
+    m_leftElevatorPID = m_leftElevatorMotor.getClosedLoopController();
   }
 
   private int allocatePosSerialNum() {
@@ -120,7 +116,7 @@ public class Crane extends SubsystemBase {
   }
 
   public Optional<Integer> craneAtSetpoint() {
-    double height = getAvgElevatorEncoderPos();
+    double height = m_elevatorEncoder.getPosition();
     double angle = m_pivotEncoder.getPosition();
     double currentTime = (double)RobotController.getFPGATime() / 1000000.0;
     if (Math.abs(height - m_heightSetpoint) <= m_heightTolerance &&
