@@ -12,6 +12,7 @@ import com.pathplanner.lib.config.PIDConstants;
 import com.revrobotics.spark.ClosedLoopSlot;
 import com.revrobotics.spark.SparkBase.PersistMode;
 
+import au.grapplerobotics.LaserCan;
 import edu.wpi.first.apriltag.AprilTag;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.apriltag.AprilTagFields;
@@ -32,7 +33,13 @@ import frc.robot.utilities.SparkUtil;
 import frc.robot.utilities.TrapezoidalConstraint;
 
 public final class Constants {
+  // Set to true during actual competition. May disable diagnostics, sanity/safety checks, etc.
+  // in order to eliminate failure modes that should only happen during testing.
+  public static final boolean kCompeting = false;
+
+  // Scheduling quantum in seconds.
   public static final double kDt = 0.02;
+
   public static final PersistMode kPersistMode = PersistMode.kNoPersistParameters;
 
   // Tunable constants are disabled unless this is set to true.
@@ -420,8 +427,10 @@ public final class Constants {
     public static final int kLeftElevatorMotorID = 9; //TODO: Change the ID or give that ID to the motor
     public static final int kRightElevatorMotorID = 10; //TODO: Change the ID or give that ID to the motor
     public static final int kPivotMotorID = 11; //TODO: Change the ID or give that ID to the motor
+    public static final int kLaserCanID = 12; //TODO: Match to LaserCAN configuration.
 
-    public static final double kDebouncingTime = 0.25;
+    public static final long kValueCacheTtlMicroseconds = 15;
+    public static final double kDebouncingTime = 0.02;
 
     //TODO: Make sure the tables are sorted from lowest to highest height.
     public static final PosEntry[] kMinAngleTable = {}; //TODO: Populate table
@@ -470,5 +479,13 @@ public final class Constants {
         add(kPivotVelPIDFSlot);
       }}
     );
+
+    // The sensor grid is 16x16, and the ROI is centered on (x,y), w x h in size.
+    public static final LaserCan.RegionOfInterest kRegionOfInterest =
+      new LaserCan.RegionOfInterest(8, 8, 16, 16);
+    // Actual elevator height for a LaserCAN measurement of 0.
+    public static double kLaserCanBaseMeasurement = 0.15; // TODO: Calibrate.
+    public static double kLoHiThreshold = 0.9;
+    public static double kElevatorHomeRapidThreshold = 0.25;
   }
 }
