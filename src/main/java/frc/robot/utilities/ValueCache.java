@@ -32,4 +32,10 @@ public class ValueCache<T> {
     }
     return m_value;
   }
+
+  public void flush() {
+    // Set the timestamp far enough in the past to invalidate the cache.
+    long currentTimestampMicroseconds = getTimestampMicroseconds();
+    m_timestampMicroseconds = currentTimestampMicroseconds - m_ttlMicroseconds - 1;
+  }
 }
