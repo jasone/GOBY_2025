@@ -69,10 +69,10 @@ public class DriveToPose extends Command {
 
   public DriveToPose(Pose2d pose, DriveSubsystem drive) {
     this(pose, drive,
-      DriveCommandConstants.kDefaultTranslationPosToleranceMeters,
-      DriveCommandConstants.kDefaultTranslationVelToleranceMetersPerSecond,
-      DriveCommandConstants.kDefaultAnglePosToleranceRadians,
-      DriveCommandConstants.kDefaultAngleVelToleranceRadiansPerSecond);
+      DriveCommandConstants.kDefaultTranslationPositionToleranceMeters,
+      DriveCommandConstants.kDefaultTranslationVelocityToleranceMetersPerSecond,
+      DriveCommandConstants.kDefaultAnglePositionToleranceRadians,
+      DriveCommandConstants.kDefaultAngleVelocityToleranceRadiansPerSecond);
   }
 
   private Translation2d getDesiredTranslation() {

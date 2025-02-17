@@ -335,10 +335,10 @@ public final class Constants {
   }
 
   public static final class DriveCommandConstants {
-    public static final double kDefaultTranslationPosToleranceMeters = 0.02;
-    public static final double kDefaultTranslationVelToleranceMetersPerSecond = 0.01;
-    public static final double kDefaultAnglePosToleranceRadians = Units.degreesToRadians(2.0);
-    public static final double kDefaultAngleVelToleranceRadiansPerSecond = Units.degreesToRadians(1.0);
+    public static final double kDefaultTranslationPositionToleranceMeters = 0.02;
+    public static final double kDefaultTranslationVelocityToleranceMetersPerSecond = 0.01;
+    public static final double kDefaultAnglePositionToleranceRadians = Units.degreesToRadians(2.0);
+    public static final double kDefaultAngleVelocityToleranceRadiansPerSecond = Units.degreesToRadians(1.0);
 
     public static final PIDF kTranslatingPIDF = new PIDF(0.0, 0.0, 0.0, 0.0); //TODO: Tune.
     public static final PIDF kTurningPIDF = new PIDF(3.0, 0.0, 0.0, 0.2); //TODO: Update the PIDF values (copied from AC/DC)
