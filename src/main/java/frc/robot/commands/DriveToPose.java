@@ -19,8 +19,8 @@ import frc.robot.utilities.TunablePIDF;
 public class DriveToPose extends Command {
   private final Pose2d m_pose;
   private final DriveSubsystem m_drive;
-  private final double m_SquaredTranslationPosToleranceMeters;
-  private final double m_SquaredTranslationVelToleranceMetersPerDt;
+  private final double m_squaredTranslationPositionToleranceMeters;
+  private final double m_squaredTranslationVelocityToleranceMetersPerDt;
 
   private static final TunablePIDF translatingPIDF = new TunablePIDF("DriveToPose.translatingPIDF",
     DriveCommandConstants.kTranslatingPIDF);
@@ -57,8 +57,8 @@ public class DriveToPose extends Command {
       double anglePosToleranceRadians, double angleVelToleranceRadiansPerSecond) {
     m_pose = pose;
     m_drive = drive;
-    m_SquaredTranslationPosToleranceMeters = square(translationPosToleranceMeters);
-    m_SquaredTranslationVelToleranceMetersPerDt =
+    m_squaredTranslationPositionToleranceMeters = square(translationPosToleranceMeters);
+    m_squaredTranslationVelocityToleranceMetersPerDt =
       square(Constants.kDt * translationVelToleranceMetersPerSecond);
 
     m_angleController.setTolerance(anglePosToleranceRadians,
@@ -173,12 +173,12 @@ public class DriveToPose extends Command {
     // defines a circle rather than a square.
     double xPosError = m_xController.getPositionError();
     double yPosError = m_yController.getPositionError();
-    if (square(xPosError) + square(yPosError) > m_SquaredTranslationPosToleranceMeters) {
+    if (square(xPosError) + square(yPosError) > m_squaredTranslationPositionToleranceMeters) {
       return false;
     }
     double xVelError = m_xController.getVelocityError();
     double yVelError = m_yController.getVelocityError();
-    if (square(xVelError) + square(yVelError) > m_SquaredTranslationVelToleranceMetersPerDt) {
+    if (square(xVelError) + square(yVelError) > m_squaredTranslationVelocityToleranceMetersPerDt) {
       return false;
     }
     return m_angleController.atSetpoint();
