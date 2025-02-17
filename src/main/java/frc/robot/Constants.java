@@ -26,8 +26,8 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.util.Units;
 import frc.robot.subsystems.CameraSubsystem.CameraConfig;
+import frc.robot.subsystems.Crane;
 import frc.robot.subsystems.SwerveModule;
-import frc.robot.utilities.CraneInterp.PosEntry;
 import frc.robot.utilities.PIDF;
 import frc.robot.utilities.SparkUtil;
 import frc.robot.utilities.TrapezoidalConstraint;
@@ -424,25 +424,28 @@ public final class Constants {
   }
 
   public static final class CraneConstants {
-    public static final int kLeftElevatorMotorID = 9; //TODO: Change the ID or give that ID to the motor
-    public static final int kRightElevatorMotorID = 10; //TODO: Change the ID or give that ID to the motor
-    public static final int kPivotMotorID = 11; //TODO: Change the ID or give that ID to the motor
-    public static final int kLaserCanID = 12; //TODO: Match to LaserCAN configuration.
+    public static final int kLeftElevatorMotorID = 9; // TODO: Change the ID or give that ID to the motor
+    public static final int kRightElevatorMotorID = 10; // TODO: Change the ID or give that ID to the motor
+    public static final int kPivotMotorID = 11; // TODO: Change the ID or give that ID to the motor
+    public static final int kLaserCanID = 12; // TODO: Match to LaserCAN configuration.
 
     public static final long kValueCacheTtlMicroseconds = 15;
-    public static final double kDebouncingTime = 0.02;
 
-    //TODO: Make sure the tables are sorted from lowest to highest height.
-    public static final PosEntry[] kMinAngleTable = {}; //TODO: Populate table
-    public static final PosEntry[] kMaxAngleTable = {}; //TODO: Populate table
+    // Time required to accelerate from stationary to maximum velocity. Acceleration must
+    // be proportional between the pivot and elevator in order to achieve "linear" movement,
+    // hence the shared constant. Both pivot and elevator must be capable of this acceleration
+    // for the crane to move smoothly.
+    public static final double kAccelerationSeconds = 0.25;
+    public static final double kPivotMaxSpeedRadiansPerSecond = Math.PI;
+    public static final double kPivotMaxAccelerationRadiansPerSecondSquared =
+      kPivotMaxSpeedRadiansPerSecond / kAccelerationSeconds; // Do not change.
+    public static final double kElevatorMaxSpeedMetersPerSecond = 1.0;
+    public static final double kElevatorMaxAcccelerationMetersPerSecondSquared =
+      kElevatorMaxSpeedMetersPerSecond / kAccelerationSeconds; // Do not change.
 
-    public static final SparkUtil.PIDFSlot kElevatorVelPIDFSlot = new SparkUtil.PIDFSlot(
+    public static final SparkUtil.PIDFSlot kElevatorMotorVelocityPIDFSlot = new SparkUtil.PIDFSlot(
       new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
       ClosedLoopSlot.kSlot0
-    );
-    public static final SparkUtil.PIDFSlot kElevatorPosPIDFSlot = new SparkUtil.PIDFSlot(
-      new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
-      ClosedLoopSlot.kSlot1
     );
     public static final SparkUtil.Config kElevatorMotorConfig = new SparkUtil.Config(
       20, // TODO: Configure.
@@ -453,18 +456,13 @@ public final class Constants {
       1.0,
       4.0,
       new ArrayList<>() {{
-        add(kElevatorPosPIDFSlot);
-        add(kElevatorVelPIDFSlot);
+        add(kElevatorMotorVelocityPIDFSlot);
       }}
     );
 
-    public static final SparkUtil.PIDFSlot kPivotVelPIDFSlot = new SparkUtil.PIDFSlot(
+    public static final SparkUtil.PIDFSlot kPivotMotorVelocityPIDFSlot = new SparkUtil.PIDFSlot(
       new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
       ClosedLoopSlot.kSlot0
-    );
-    public static final SparkUtil.PIDFSlot kPivotPosPIDFSlot = new SparkUtil.PIDFSlot(
-      new PIDF(0.0, 0.0, 0.0, 0.0), // TODO: Tune.
-      ClosedLoopSlot.kSlot1
     );
     public static final SparkUtil.Config kPivotMotorConfig = new SparkUtil.Config(
       20, // TODO: Configure.
@@ -475,16 +473,28 @@ public final class Constants {
       Math.PI / 2.0,
       2.0 * Math.PI,
       new ArrayList<>() {{
-        add(kPivotPosPIDFSlot);
-        add(kPivotVelPIDFSlot);
+        add(kPivotMotorVelocityPIDFSlot);
       }}
     );
+
+    public static final Crane.Tolerance kDefaultPivotTolerance = new Crane.Tolerance(
+      Units.degreesToRadians(2.0),
+      Units.degreesToRadians(1.0)
+    );
+    public static final Crane.Tolerance kDefaultElevatorTolerance = new Crane.Tolerance(
+      0.005,
+      0.002
+    );
+
+    public static final PIDF kPivotPIDF = new PIDF(0.0, 0.0, 0.0, 0.0); //T ODO: Tune.
+    public static final PIDF kElevatorPIDF = new PIDF(3.0, 0.0, 0.0, 0.2); // TODO: Tune
 
     // The sensor grid is 16x16, and the ROI is centered on (x,y), w x h in size.
     public static final LaserCan.RegionOfInterest kRegionOfInterest =
       new LaserCan.RegionOfInterest(8, 8, 16, 16);
     // Actual elevator height for a LaserCAN measurement of 0.
     public static double kLaserCanBaseMeasurement = 0.15; // TODO: Calibrate.
+    public static double kHiHome = 1.25;
     public static double kLoHiThreshold = 0.9;
     public static double kElevatorHomeRapidThreshold = 0.25;
   }

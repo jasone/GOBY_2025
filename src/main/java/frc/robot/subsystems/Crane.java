@@ -1,7 +1,3 @@
-// Copyright (c) FIRST and other WPILib contributors.
-// Open Source Software; you can modify and/or share it under the terms of
-// the WPILib BSD license file in the root directory of this project.
-
 package frc.robot.subsystems;
 
 import java.io.IOException;
@@ -17,11 +13,8 @@ import com.revrobotics.spark.SparkLowLevel.MotorType;
 import au.grapplerobotics.ConfigurationFailedException;
 import au.grapplerobotics.LaserCan;
 import edu.wpi.first.math.controller.ProfiledPIDController;
-import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
-import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.Constants.CraneConstants;
@@ -47,8 +40,6 @@ public class Crane extends SubsystemBase {
   private final ValueCache<Double> m_elevatorPositionCache;
   private final ValueCache<Double> m_elevatorVelocityCache;
 
-  private Translation2d m_setpoint;
-
   private static final TunablePIDF pivotPIDF = new TunablePIDF("Crane.pivotPIDF",
     CraneConstants.kPivotPIDF);
   private static final TunablePIDF elevatorPIDF = new TunablePIDF("Crane.elevatorPIDF",
@@ -66,15 +57,15 @@ public class Crane extends SubsystemBase {
     elevatorPIDF.get().d(),
     new TrapezoidProfile.Constraints(0.0, 0.0) // Dynamically scaled.
   );
-  private double m_angleSetpoint;
-  private double m_heightSetpoint;
 
-  private double m_angleTolerance;
-  private double m_heightTolerance;
+  private Translation2d m_setpoint;
+  private double m_pivotControlFactor; // 1.0 for position-based control.
+  private double m_elevatorControlFactor; // 1.0 for position-based control.
+
+  public record Tolerance(double position, double velocity) {}
 
   private int m_currentSerialNum = 0;
-  private double m_startTime = 0.0;
-  private boolean m_isVelControlled = false;
+  private boolean m_isVelocityControlled = false;
 
   private enum State {
     CRANING,             // Normal crane operation.
@@ -138,86 +129,79 @@ public class Crane extends SubsystemBase {
     m_state = Constants.kCompeting ? State.LO_PIVOT_HOME : State.ESTIMATE_H;
   }
 
-  private int allocatePosSerialNum() {
-    m_isVelControlled = false;
-    int serialNum = m_currentSerialNum;
-    m_currentSerialNum++;
-    return serialNum;
-  }
-
-  // Only increases serial number once while controlling with velocity to avoid the serial num getting too large.
-  private void allocateVelSerialNum() {
-    if (!m_isVelControlled) {
-      m_isVelControlled = true;
+  // Only increases serial number once while controlling with velocity to avoid the serial
+  // number rapidly increasing.
+  private int allocateSerialNum(boolean velocityControl) {
+    if (velocityControl) {
+      if (!m_isVelocityControlled) {
+        m_isVelocityControlled = true;
+        m_currentSerialNum++;
+      }
+    } else {
+      m_isVelocityControlled = false;
       m_currentSerialNum++;
     }
+    return m_currentSerialNum;
   }
 
-  private void moveElevatorToImpl(double height, double heightTolerance) {
-    m_heightSetpoint = height;
-    m_heightTolerance = heightTolerance;
-    m_leftElevatorPID.setReference(height, ControlType.kMAXMotionPositionControl,
-      CraneConstants.kElevatorPosPIDFSlot.slot());
+  private int moveTo(double pivotAngle, double elevatorHeight,
+      Tolerance pivotTolerance, Tolerance elevatorTolerance,
+      double pivotVelocityFactor, double elevatorVelocityFactor) {
+    m_setpoint = new Translation2d(pivotAngle, elevatorHeight);
+    m_aController.setTolerance(pivotTolerance.position,
+      Constants.kDt * pivotTolerance.velocity);
+    m_hController.setTolerance(elevatorTolerance.position,
+      Constants.kDt * elevatorTolerance.velocity
+    );
+    m_pivotControlFactor = pivotVelocityFactor;
+    m_elevatorControlFactor = elevatorVelocityFactor;
+    boolean velocityControl = pivotVelocityFactor != 1.0 || elevatorVelocityFactor != 1.0;
+    return allocateSerialNum(velocityControl);
   }
 
-  private void movePivotToImpl(double angle, double angleTolerance) {
-    m_angleSetpoint = angle;
-    m_angleTolerance = angleTolerance;
-    m_pivotPID.setReference(angle, ControlType.kMAXMotionPositionControl,
-      CraneConstants.kPivotPosPIDFSlot.slot());
+  public int moveTo(double pivotAngle, double elevatorHeight,
+      Tolerance pivotTolerance, Tolerance elevatorTolerance) {
+    return moveTo(pivotAngle, elevatorHeight, pivotTolerance, elevatorTolerance,
+      1.0, 1.0);
   }
 
-  public int moveElevatorTo(double height, double heightTolerance) {
-    moveElevatorToImpl(height, heightTolerance);
-    return allocatePosSerialNum();
+  public int moveTo(double pivotAngle, double elevatorHeight) {
+    return moveTo(pivotAngle, elevatorHeight,
+      CraneConstants.kDefaultPivotTolerance, CraneConstants.kDefaultElevatorTolerance);
   }
 
-  public int movePivotTo(double angle, double angleTolerance) {
-    movePivotToImpl(angle, angleTolerance);
-    return allocatePosSerialNum();
+  public int movePivotTo(double pivotAngle) {
+    return moveTo(pivotAngle, m_setpoint.getY());
   }
 
-  // Tolerance is in absolute difference
-  public int moveTo(double height, double angle, double heightTolerance, double angleTolerance) {
-    m_heightSetpoint = height;
-    m_angleSetpoint = angle;
-    m_heightTolerance = heightTolerance;
-    m_angleTolerance = angleTolerance;
-    moveElevatorToImpl(height, heightTolerance);
-    movePivotToImpl(angle, angleTolerance);
-    return allocatePosSerialNum();
+  public int moveElevatorTo(double elevatorHeight) {
+    return moveTo(m_setpoint.getX(), elevatorHeight);
   }
 
-  public void moveElevatorVel(double velocity) {
-    m_leftElevatorPID.setReference(velocity, ControlType.kMAXMotionVelocityControl, CraneConstants.kElevatorVelPIDFSlot.slot());
-    allocateVelSerialNum();;
+  public void move(double pivotVelocityRadiansPerSecond,
+      double elevatorVelocityMetersPerSecond) {
+    // XXX Calculate point of intersection with invalid config space, and move to it
+    // with specified max velocity.
   }
 
-  public void movePivotVel(double velocity) {
-    m_pivotPID.setReference(velocity, ControlType.kMAXMotionVelocityControl, CraneConstants.kPivotVelPIDFSlot.slot());
-    allocateVelSerialNum();
+  public void movePivot(double pivotVelocityRadiansPerSecond) {
+    move(pivotVelocityRadiansPerSecond, 0.0);
   }
 
-  private boolean pivotAtSetpoint() {
-    double a = m_pivotEncoder.getPosition();
-    return Math.abs(a - m_angleSetpoint) <= m_angleTolerance;
+  public void moveElevator(double elevatorVelocityMetersPerSecond) {
+    move(0.0, elevatorVelocityMetersPerSecond);
   }
 
-  private boolean elevatorAtSetpoint() {
-    double h = m_elevatorEncoder.getPosition();
-    return Math.abs(h - m_heightSetpoint) <= m_heightTolerance;
+  private boolean atSetpointImpl() {
+    return m_aController.atSetpoint() && m_hController.atSetpoint();
   }
 
-  public Optional<Integer> craneAtSetpoint() {
-    double currentTime = (double)RobotController.getFPGATime() / 1_000_000.0;
-    if (pivotAtSetpoint() && elevatorAtSetpoint()) {
-      if (m_startTime == 0.0) {
-        m_startTime = currentTime;
-      } else if (currentTime - m_startTime >= CraneConstants.kDebouncingTime) {
-        return Optional.of(m_currentSerialNum);
-      }
+  public Optional<Integer> atSetpoint() {
+    if (atSetpointImpl()) {
+      return Optional.of(m_currentSerialNum);
+    } else {
+      return Optional.empty();
     }
-    return Optional.empty();
   }
 
   private void laserCanStatusError(int status) {
@@ -249,70 +233,14 @@ public class Crane extends SubsystemBase {
       new IOException());
   }
 
-  private void
-  initPivotPosition(double a) {
+  private void initPivotPosition(double a) {
     m_pivotEncoder.setPosition(a);
     m_pivotPositionCache.flush();
   }
 
-  private void
-  initElevatorPosition(double h) {
+  private void initElevatorPosition(double h) {
     m_elevatorEncoder.setPosition(h);
     m_elevatorPositionCache.flush();
-  }
-
-  private void toStateCraning() {
-    m_state = State.CRANING;
-  }
-
-  private void toStateLoPivotHome() {
-    // XXX Configure pivot to low amperage, and rotate upward slowly.
-    m_state = State.LO_PIVOT_HOME;
-  }
-
-  private void toStateLoElevatorRapid() {
-    double h = m_elevatorPositionCache.get();
-    if (h > CraneConstants.kElevatorHomeRapidThreshold) {
-      // XXX Rapid move.
-      m_state = State.LO_ELEVATOR_RAPID;
-    } else {
-      m_state = State.LO_ELEVATOR_HOME;
-    }
-  }
-
-  private void toStateLoElevatorHome() {
-    // XXX Configure elevator to low amperage, and move downward slowly.
-    m_state = State.LO_ELEVATOR_HOME;
-  }
-
-  private void toStateHiElevatorRapidA() {
-    // XXX
-    m_state = State.HI_ELEVATOR_RAPID_A;
-  }
-
-  private void toStateHiPivotHome() {
-    // XXX
-    m_state = State.HI_PIVOT_HOME;
-  }
-
-  private void toStateHiPivot0() {
-    // XXX
-    m_state = State.HI_PIVOT_0;
-  }
-
-  private void toStateHiElevatorRapidB() {
-    // XXX
-    m_state = State.HI_ELEVATOR_RAPID_B;
-  }
-
-  private void toStateHiElevatorHome() {
-    // XXX
-    m_state = State.HI_ELEVATOR_HOME;
-  }
-
-  private void toStateHiPivotMax() {
-    // XXX
-    m_state = State.HI_PIVOT_MAX;
   }
 
   private Translation2d getPosition() {
@@ -328,23 +256,29 @@ public class Crane extends SubsystemBase {
   }
 
   private Translation2d getDeviation(Translation2d position) {
-    getDesiredTranslation().minus(position);
+    return getDesiredTranslation().minus(position);
   }
 
   /* Dynamically scale the a,h controller constraints such that the combined a,h component
    * movements combine to follow a "straight" line, i.e. the component movements complete
    * simultaneously. */
   private void scaleAHConstraints(Translation2d position, Translation2d deviation) {
-    Rotation2d translationAngle = deviation.getAngle();
-    double aFactor = translationAngle.getCos();
+    // Estimate pivot,elevator movement time, ignoring current velocity, as the basis of constraint
+    // factors. Acceleration can be ignored since it proportionally affects the axes.
+    double pivotTime = deviation.getX()
+      / (CraneConstants.kPivotMaxSpeedRadiansPerSecond * m_pivotControlFactor);
+    double elevatorTime = deviation.getY()
+      / CraneConstants.kElevatorMaxSpeedMetersPerSecond * m_elevatorControlFactor;
+    double maxTime = Math.max(pivotTime, elevatorTime);
+    double aFactor = pivotTime / maxTime;
+    double hFactor = elevatorTime / maxTime;
     m_aController.setConstraints(new TrapezoidProfile.Constraints(
-      aFactor * CraneConstants.kPivotMaxSpeedRadiansPerSecond,
-      aFactor * CraneConstants.kPivotMaxAccelerationRadiansPerSecondSquared
+      aFactor * CraneConstants.kPivotMaxSpeedRadiansPerSecond * m_pivotControlFactor,
+      aFactor * CraneConstants.kPivotMaxAccelerationRadiansPerSecondSquared * m_pivotControlFactor
     ));
-    double hFactor = translationAngle.getSin();
     m_hController.setConstraints(new TrapezoidProfile.Constraints(
-      hFactor * CraneConstants.kElevatorMaxSpeedMetersPerSecond,
-      hFactor * CraneConstants.kElevatorMaxAcccelerationMetersPerSecondSquared
+      hFactor * CraneConstants.kElevatorMaxSpeedMetersPerSecond * m_elevatorControlFactor,
+      hFactor * CraneConstants.kElevatorMaxAcccelerationMetersPerSecondSquared * m_elevatorControlFactor
     ));
   }
 
@@ -371,8 +305,65 @@ public class Crane extends SubsystemBase {
     scaleAHConstraints(position, deviation);
     double aVelocity = m_aController.calculate(deviation.getX());
     double hVelocity = m_hController.calculate(deviation.getY());
-    m_pivotMotor.set(aVelocity);
-    m_leftElevatorMotor.set(hVelocity);
+    m_pivotPID.setReference(aVelocity, ControlType.kMAXMotionVelocityControl,
+      CraneConstants.kPivotMotorVelocityPIDFSlot.slot());
+    m_leftElevatorPID.setReference(hVelocity, ControlType.kMAXMotionVelocityControl,
+      CraneConstants.kElevatorMotorVelocityPIDFSlot.slot());
+  }
+
+  private void toStateCraning() {
+    resetCrane();
+    m_state = State.CRANING;
+  }
+
+  private void toStateLoPivotHome() {
+    // XXX Configure pivot to low amperage, and rotate upward slowly.
+    m_state = State.LO_PIVOT_HOME;
+  }
+
+  private void toStateLoElevatorRapid() {
+    double h = m_elevatorPositionCache.get();
+    if (h > CraneConstants.kElevatorHomeRapidThreshold) {
+      moveElevatorTo(CraneConstants.kElevatorHomeRapidThreshold);
+      m_state = State.LO_ELEVATOR_RAPID;
+    } else {
+      m_state = State.LO_ELEVATOR_HOME;
+    }
+  }
+
+  private void toStateLoElevatorHome() {
+    // XXX Configure elevator to low amperage, and move downward slowly.
+    m_state = State.LO_ELEVATOR_HOME;
+  }
+
+  private void toStateHiElevatorRapidA() {
+    moveElevatorTo(CraneConstants.kHiHome);
+    m_state = State.HI_ELEVATOR_RAPID_A;
+  }
+
+  private void toStateHiPivotHome() {
+    // XXX
+    m_state = State.HI_PIVOT_HOME;
+  }
+
+  private void toStateHiPivot0() {
+    // XXX
+    m_state = State.HI_PIVOT_0;
+  }
+
+  private void toStateHiElevatorRapidB() {
+    moveElevatorTo(CraneConstants.kElevatorHomeRapidThreshold);
+    m_state = State.HI_ELEVATOR_RAPID_B;
+  }
+
+  private void toStateHiElevatorHome() {
+    // XXX
+    m_state = State.HI_ELEVATOR_HOME;
+  }
+
+  private void toStateHiPivotMax() {
+    // XXX
+    m_state = State.HI_PIVOT_MAX;
   }
 
   @Override
@@ -409,62 +400,75 @@ public class Crane extends SubsystemBase {
       case LO_PIVOT_HOME: {
         // XXX If pivot motor amperage is spiked (and velocity 0?), stop motor,
         // init pivot position.
-
-        if (Constants.kCompeting) {
-          toStateLoElevatorHome();
-        } else {
-          toStateLoElevatorRapid();
+        if (true/* XXX */) {
+          m_pivotMotor.stopMotor();
+          initPivotPosition(Math.PI / 2.0);
+          if (Constants.kCompeting) {
+            toStateLoElevatorHome();
+          } else {
+            toStateLoElevatorRapid();
+          }
         }
         break;
       }
       case LO_ELEVATOR_RAPID: {
-        // XXX Transition if at setpoint.
-
-        toStateLoElevatorRapid();
+        if (atSetpointImpl()) {
+          toStateLoElevatorRapid();
+        }
         break;
       }
       case LO_ELEVATOR_HOME: {
         // XXX If elevator amperage is spiked (and velocity 0?), stop motor,
         // init elevator position.
-
-        toStateCraning();
+        if (true/* XXX */) {
+          m_leftElevatorMotor.stopMotor();
+          initElevatorPosition(0.0);
+          toStateCraning();
+        }
         break;
       }
       case HI_ELEVATOR_RAPID_A: {
-        // XXX Transition if at setpoint.
-
-        toStateHiPivotHome();
+        if (atSetpointImpl()) {
+          toStateHiPivotHome();
+        }
         break;
       }
       case HI_PIVOT_HOME: {
         // XXX Same as LO_PIVOT_HOME.
-
-        toStateHiPivot0();
+        if (true /* XXX */) {
+          m_pivotMotor.stopMotor();
+          initPivotPosition(Math.PI / 2.0);
+          toStateHiPivot0();
+        }
         break;
       }
       case HI_PIVOT_0: {
-        // XXX Transition if at setpoint.
-
-        toStateHiElevatorRapidB();
+        if (atSetpointImpl()) {
+          toStateHiElevatorRapidB();
+        }
         break;
       }
       case HI_ELEVATOR_RAPID_B: {
-        // XXX Transition if at setpoint.
-
-        toStateHiElevatorHome();
+        if (atSetpointImpl()) {
+          toStateHiElevatorHome();
+        }
         break;
       }
       case HI_ELEVATOR_HOME: {
         // XXX Same as LO_ELEVATOR_HOME.
-
-        toStateHiPivotMax();
+        if (true) {
+          m_leftElevatorMotor.stopMotor();
+          initElevatorPosition(0.0);
+          toStateHiPivotMax();
+        }
         break;
       }
       case HI_PIVOT_MAX: {
-        // XXX Transition if at setpoint.
-
-        toStateCraning();
+        if (atSetpointImpl()) {
+          toStateCraning();
+        }
         break;
       }
     }
   }
+}
